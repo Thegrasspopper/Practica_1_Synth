@@ -132,6 +132,10 @@
         padding-right: 0.08em;
       }
 
+      .line-segment {
+        display: inline-block;
+      }
+
       .caret {
         display: none;
         width: 0.08em;
@@ -355,7 +359,7 @@
         'MANTEN LA ENERGIA ARRIBA'
       ];
       let currentSuggestion = '';
-      let displayText = '';
+      let textRuns = [];
       let hasStartedTyping = false;
       let hasInteracted = false;
       let synth = null;
@@ -407,7 +411,16 @@
       }
 
       function render() {
-        line.textContent = displayText;
+        line.textContent = '';
+        const fragment = document.createDocumentFragment();
+        for (const run of textRuns) {
+          const segment = document.createElement('span');
+          segment.className = 'line-segment';
+          segment.style.fontFamily = fontModes[run.fontModeIndex].family;
+          segment.textContent = run.text;
+          fragment.appendChild(segment);
+        }
+        line.appendChild(fragment);
         ticker.classList.toggle('is-placeholder', !hasStartedTyping);
         caret.classList.toggle('is-active', hasStartedTyping);
         startHint.classList.toggle('is-hidden', hasInteracted);
@@ -442,7 +455,6 @@
       function applyFontMode(index) {
         currentFontModeIndex = (index + fontModes.length) % fontModes.length;
         const mode = getCurrentFontMode();
-        document.body.style.fontFamily = mode.family;
         fontBtn.textContent = mode.buttonLabel;
         fontBtn.title = `TIPOGRAFIA ${mode.mood}`;
 
@@ -456,6 +468,37 @@
             }
           });
         }
+      }
+
+      function setRunsFromText(text) {
+        textRuns = text ? [{ text, fontModeIndex: currentFontModeIndex }] : [];
+      }
+
+      function appendToRuns(char) {
+        if (!char) {
+          return;
+        }
+
+        const lastRun = textRuns[textRuns.length - 1];
+        if (lastRun && lastRun.fontModeIndex === currentFontModeIndex) {
+          lastRun.text += char;
+          return;
+        }
+
+        textRuns.push({ text: char, fontModeIndex: currentFontModeIndex });
+      }
+
+      function removeLastRunChar() {
+        if (textRuns.length === 0) {
+          return false;
+        }
+
+        const lastRun = textRuns[textRuns.length - 1];
+        lastRun.text = lastRun.text.slice(0, -1);
+        if (lastRun.text.length === 0) {
+          textRuns.pop();
+        }
+        return true;
       }
 
       function startAudio() {
@@ -517,7 +560,7 @@
         hasInteracted = true;
         hasStartedTyping = true;
         lineWrap.classList.remove('idle-moving');
-        displayText = '';
+        setRunsFromText('');
         if (renderNow) {
           render();
         }
@@ -526,7 +569,7 @@
 
       function resetPhraseState() {
         currentSuggestion = getRandomSuggestion();
-        displayText = currentSuggestion;
+        setRunsFromText(currentSuggestion);
         hasStartedTyping = false;
         hasInteracted = false;
         if (synth) {
@@ -548,6 +591,7 @@
 
       fontBtn.addEventListener('click', () => {
         applyFontMode(currentFontModeIndex + 1);
+        fontBtn.blur();
         requestAnimationFrame(updateScrollToEnd);
       });
 
@@ -560,15 +604,15 @@
           return;
         }
 
-        const tagName = event.target && event.target.tagName ? event.target.tagName : '';
-        if (tagName === 'INPUT' || tagName === 'BUTTON' || tagName === 'SELECT') {
+        const target = event.target;
+        if (target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
           return;
         }
 
         if (event.key === 'Backspace') {
           const isFirstInteraction = enterWritingMode(false);
           ticker.classList.remove('idle');
-          if (displayText.length === 0) {
+          if (textRuns.length === 0) {
             if (isFirstInteraction) {
               render();
             }
@@ -576,7 +620,7 @@
           }
 
           event.preventDefault();
-          displayText = displayText.slice(0, -1);
+          removeLastRunChar();
           render();
           return;
         }
@@ -585,7 +629,7 @@
           enterWritingMode(false);
           ticker.classList.remove('idle');
           void startAudio();
-          displayText += ' ';
+          appendToRuns(' ');
           render();
           return;
         }
@@ -597,7 +641,7 @@
 
         enterWritingMode(false);
         ticker.classList.remove('idle');
-        displayText += event.key;
+        appendToRuns(event.key);
         render();
         if (audioReady) {
           playLetterSound(event.key);
