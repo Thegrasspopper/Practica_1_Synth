@@ -36,13 +36,13 @@
         height: 100vh;
       }
 
-      .brand {
+      .top-left {
         position: absolute;
-        top: 24px;
+        top: 20px;
         left: 24px;
-        font-size: 0.85rem;
-        letter-spacing: 0.15em;
-        font-weight: 700;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
       }
 
       .top-right {
@@ -63,6 +63,18 @@
 
       input[type='range'] {
         accent-color: var(--fg);
+      }
+
+      .vibe-select {
+        width: 170px;
+        background: var(--bg);
+        color: var(--fg);
+        border: 1px solid var(--border);
+        font-family: inherit;
+        font-size: 0.75rem;
+        letter-spacing: 0.08em;
+        padding: 7px 10px;
+        text-transform: uppercase;
       }
 
       .space-slider {
@@ -180,6 +192,39 @@
         right: 24px;
       }
 
+      .audio-gate {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.95);
+        z-index: 20;
+      }
+
+      .audio-gate.is-hidden {
+        display: none;
+      }
+
+      .audio-start-btn {
+        min-width: min(70vw, 460px);
+        border: 2px solid var(--border);
+        background: var(--bg);
+        color: var(--fg);
+        font-family: inherit;
+        font-size: clamp(1.2rem, 3.8vw, 2.2rem);
+        letter-spacing: 0.12em;
+        font-weight: 800;
+        text-transform: uppercase;
+        padding: 20px 26px;
+        cursor: pointer;
+      }
+
+      .audio-start-btn:hover {
+        background: var(--fg);
+        color: var(--bg);
+      }
+
       @media (max-width: 768px) {
         .text-zone {
           top: 44%;
@@ -204,7 +249,15 @@
   </head>
   <body>
     <main class="ui">
-      <div class="brand">VIBE</div>
+      <section class="top-left" aria-label="Selector de vibe">
+        <label class="label" for="vibe">VIBE</label>
+        <select id="vibe" class="vibe-select">
+          <option value="sine">CALMA</option>
+          <option value="triangle">BRUMA</option>
+          <option value="sawtooth">TENSIÓN</option>
+          <option value="square">CRUDO</option>
+        </select>
+      </section>
 
       <section class="top-right" aria-label="Control de espacio">
         <label class="label" for="space">ESPACIO</label>
@@ -230,8 +283,13 @@
 
       <button id="fontBtn" class="bottom-btn btn-left" type="button">TIPOGRAFÍA</button>
       <button id="newPhraseBtn" class="bottom-btn btn-right" type="button">NUEVA FRASE</button>
+
+      <div id="audioGate" class="audio-gate">
+        <button id="audioStartBtn" class="audio-start-btn" type="button">INICIAR AUDIO</button>
+      </div>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
     <script>
       const ticker = document.getElementById('ticker');
       const tickerViewport = document.querySelector('.ticker-viewport');
@@ -240,6 +298,11 @@
       const startHint = document.getElementById('startHint');
       const newPhraseBtn = document.getElementById('newPhraseBtn');
       const fontBtn = document.getElementById('fontBtn');
+      const vibeSelect = document.getElementById('vibe');
+      const volumeSlider = document.getElementById('volume');
+      const audioGate = document.getElementById('audioGate');
+      const audioStartBtn = document.getElementById('audioStartBtn');
+      const scaleNotes = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'];
       const suggestedPhrases = [
         'LA VIBRA ESTA EN EL AIRE',
         'TODO EMPIEZA CON UNA PALABRA',
@@ -251,6 +314,8 @@
       let currentSuggestion = '';
       let typedSuffix = '';
       let hasStartedTyping = false;
+      let synth = null;
+      let audioReady = false;
 
       function getRandomSuggestion() {
         if (suggestedPhrases.length === 1) {
@@ -293,15 +358,76 @@
         }
       }
 
+      function normalizeKeyToLetter(value) {
+        if (!value || value.length !== 1) {
+          return '';
+        }
+
+        return value
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase();
+      }
+
+      function setSynthVolume() {
+        if (!synth) {
+          return;
+        }
+
+        const amount = Number(volumeSlider.value);
+        const decibels = -36 + amount * 0.36;
+        synth.volume.value = decibels;
+      }
+
+      async function startAudio() {
+        if (audioReady) {
+          return;
+        }
+
+        await Tone.start();
+        synth = new Tone.PolySynth(Tone.Synth, {
+          oscillator: { type: vibeSelect.value },
+          envelope: { attack: 0.01, decay: 0.1, sustain: 0.25, release: 1.1 }
+        }).toDestination();
+        setSynthVolume();
+        audioReady = true;
+        audioGate.classList.add('is-hidden');
+      }
+
+      function playLetterSound(inputChar) {
+        if (!audioReady || !synth) {
+          return;
+        }
+
+        const normalized = normalizeKeyToLetter(inputChar);
+        if (!/^[a-z]$/.test(normalized)) {
+          return;
+        }
+
+        const index = normalized.charCodeAt(0) - 97;
+        const note = scaleNotes[index % scaleNotes.length];
+        synth.triggerAttackRelease(note, '8n');
+      }
+
       function resetPhraseState() {
         currentSuggestion = getRandomSuggestion();
         typedSuffix = '';
         hasStartedTyping = false;
+        if (synth) {
+          synth.releaseAll();
+        }
         renderPhrase();
         requestAnimationFrame(() => updateTickerMotion(true));
       }
 
       newPhraseBtn.addEventListener('click', resetPhraseState);
+      vibeSelect.addEventListener('change', () => {
+        if (synth) {
+          synth.set({ oscillator: { type: vibeSelect.value } });
+        }
+      });
+      volumeSlider.addEventListener('input', setSynthVolume);
+      audioStartBtn.addEventListener('click', startAudio);
 
       fontBtn.addEventListener('click', () => {
         document.body.style.fontWeight = document.body.style.fontWeight === '800' ? '400' : '800';
@@ -309,12 +435,16 @@
       });
 
       window.addEventListener('keydown', (event) => {
+        if (event.repeat) {
+          return;
+        }
+
         if (event.ctrlKey || event.metaKey || event.altKey) {
           return;
         }
 
         const tagName = event.target && event.target.tagName ? event.target.tagName : '';
-        if (tagName === 'INPUT' || tagName === 'BUTTON') {
+        if (tagName === 'INPUT' || tagName === 'BUTTON' || tagName === 'SELECT') {
           return;
         }
 
@@ -331,7 +461,7 @@
           return;
         }
 
-        if (event.key === 'Enter') {
+        if (event.key === ' ') {
           hasStartedTyping = true;
           typedSuffix += ' ';
           renderPhrase();
@@ -339,12 +469,16 @@
           return;
         }
 
-        if (event.key.length === 1) {
-          hasStartedTyping = true;
-          typedSuffix += event.key;
-          renderPhrase();
-          requestAnimationFrame(() => updateTickerMotion(true));
+        const normalized = normalizeKeyToLetter(event.key);
+        if (!/^[a-z]$/.test(normalized)) {
+          return;
         }
+
+        hasStartedTyping = true;
+        typedSuffix += event.key;
+        renderPhrase();
+        requestAnimationFrame(() => updateTickerMotion(true));
+        playLetterSound(event.key);
       });
 
       window.addEventListener('resize', () => updateTickerMotion(false));
