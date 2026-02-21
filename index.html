@@ -117,6 +117,7 @@
         line-height: 1;
         font-weight: 800;
         letter-spacing: -0.02em;
+        transition: font-family 0.25s ease;
       }
 
       .ticker.is-placeholder {
@@ -366,6 +367,8 @@
       let audioReady = false;
       let audioStartPromise = null;
       let currentFontModeIndex = 0;
+      let idleFontPreviewIndex = 0;
+      let idleFontTimer = null;
 
       function getRandomSuggestion() {
         if (suggestedPhrases.length === 1) {
@@ -424,6 +427,11 @@
         ticker.classList.toggle('is-placeholder', !hasStartedTyping);
         caret.classList.toggle('is-active', hasStartedTyping);
         startHint.classList.toggle('is-hidden', hasInteracted);
+        if (hasStartedTyping) {
+          ticker.style.removeProperty('font-family');
+        } else {
+          ticker.style.fontFamily = fontModes[idleFontPreviewIndex].family;
+        }
         requestAnimationFrame(hasStartedTyping ? updateScrollToEnd : updateIdleAnimation);
       }
 
@@ -468,6 +476,28 @@
             }
           });
         }
+      }
+
+      function startIdleFontPreview() {
+        if (idleFontTimer) {
+          return;
+        }
+
+        idleFontTimer = window.setInterval(() => {
+          if (hasStartedTyping) {
+            return;
+          }
+          idleFontPreviewIndex = (idleFontPreviewIndex + 1) % fontModes.length;
+          render();
+        }, 1500);
+      }
+
+      function stopIdleFontPreview() {
+        if (!idleFontTimer) {
+          return;
+        }
+        window.clearInterval(idleFontTimer);
+        idleFontTimer = null;
       }
 
       function setRunsFromText(text) {
@@ -563,6 +593,7 @@
         hasInteracted = true;
         hasStartedTyping = true;
         lineWrap.classList.remove('idle-moving');
+        stopIdleFontPreview();
         setRunsFromText('');
         if (renderNow) {
           render();
@@ -575,11 +606,13 @@
         setRunsFromText(currentSuggestion);
         hasStartedTyping = false;
         hasInteracted = false;
+        idleFontPreviewIndex = currentFontModeIndex;
         if (synth) {
           synth.releaseAll();
         }
         lineWrap.style.transform = 'translateX(0)';
         ticker.classList.add('idle');
+        startIdleFontPreview();
         render();
       }
 
@@ -594,6 +627,10 @@
 
       fontBtn.addEventListener('click', () => {
         applyFontMode(currentFontModeIndex + 1);
+        if (!hasStartedTyping) {
+          idleFontPreviewIndex = currentFontModeIndex;
+          render();
+        }
         fontBtn.blur();
         requestAnimationFrame(updateScrollToEnd);
       });
