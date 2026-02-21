@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VIBE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #000000;
+        --border: #000000;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: 'Syne', sans-serif;
+        overflow: hidden;
+      }
+
+      .ui {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      .brand {
+        position: absolute;
+        top: 24px;
+        left: 24px;
+        font-size: 0.85rem;
+        letter-spacing: 0.15em;
+        font-weight: 700;
+      }
+
+      .top-right {
+        position: absolute;
+        top: 20px;
+        right: 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+      }
+
+      .label {
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        font-weight: 700;
+      }
+
+      input[type='range'] {
+        accent-color: var(--fg);
+      }
+
+      .space-slider {
+        width: min(34vw, 260px);
+      }
+
+      .text-zone {
+        position: absolute;
+        left: 50%;
+        top: 47%;
+        transform: translate(-50%, -50%);
+        width: min(88vw, 1200px);
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        padding: 14px 0;
+        overflow: hidden;
+      }
+
+      .ticker {
+        display: inline-flex;
+        align-items: center;
+        gap: 4rem;
+        white-space: nowrap;
+        font-size: clamp(3rem, 9vw, 9rem);
+        line-height: 1;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        will-change: transform;
+      }
+
+      .ticker.is-moving {
+        animation: slide-left var(--duration, 10s) linear infinite;
+      }
+
+      @keyframes slide-left {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(calc(-1 * var(--shift, 0px)));
+        }
+      }
+
+      .center-bottom {
+        position: absolute;
+        left: 50%;
+        bottom: 22px;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .volume-wrap {
+        width: 170px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .volume-slider {
+        width: 150px;
+        transform: rotate(-90deg);
+        transform-origin: center;
+      }
+
+      .bottom-btn {
+        position: absolute;
+        bottom: 24px;
+        background: transparent;
+        color: var(--fg);
+        border: 1px solid var(--border);
+        font-family: inherit;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        font-size: 0.72rem;
+        padding: 10px 14px;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+
+      .bottom-btn:hover {
+        background: var(--fg);
+        color: var(--bg);
+      }
+
+      .btn-left {
+        left: 24px;
+      }
+
+      .btn-right {
+        right: 24px;
+      }
+
+      @media (max-width: 768px) {
+        .text-zone {
+          top: 44%;
+        }
+
+        .top-right {
+          left: 24px;
+          right: auto;
+          top: 58px;
+          align-items: flex-start;
+        }
+
+        .space-slider {
+          width: min(64vw, 280px);
+        }
+
+        .center-bottom {
+          bottom: 84px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="ui">
+      <div class="brand">VIBE</div>
+
+      <section class="top-right" aria-label="Control de espacio">
+        <label class="label" for="space">ESPACIO</label>
+        <input id="space" class="space-slider" type="range" min="0" max="100" value="25" />
+      </section>
+
+      <section class="text-zone" aria-label="Frase principal">
+        <div id="ticker" class="ticker">
+          <span id="phrase">LA VIBRA EMPIEZA AQUI</span>
+          <span aria-hidden="true">LA VIBRA EMPIEZA AQUI</span>
+        </div>
+      </section>
+
+      <section class="center-bottom" aria-label="Control de volumen">
+        <div class="volume-wrap">
+          <input id="volume" class="volume-slider" type="range" min="0" max="100" value="75" />
+        </div>
+        <label class="label" for="volume">VOLUMEN</label>
+      </section>
+
+      <button id="fontBtn" class="bottom-btn btn-left" type="button">TIPOGRAFÍA</button>
+      <button id="newPhraseBtn" class="bottom-btn btn-right" type="button">NUEVA FRASE</button>
+    </main>
+
+    <script>
+      const ticker = document.getElementById('ticker');
+      const phrase = document.getElementById('phrase');
+      const newPhraseBtn = document.getElementById('newPhraseBtn');
+      const fontBtn = document.getElementById('fontBtn');
+
+      function syncTickerText(value) {
+        const safeText = value.trim() || 'LA VIBRA EMPIEZA AQUI';
+        phrase.textContent = safeText;
+        ticker.children[1].textContent = safeText;
+      }
+
+      function updateTickerMotion() {
+        ticker.classList.remove('is-moving');
+        ticker.style.removeProperty('--shift');
+        ticker.style.removeProperty('--duration');
+
+        const containerWidth = ticker.parentElement.clientWidth;
+        const textWidth = phrase.getBoundingClientRect().width;
+
+        if (textWidth > containerWidth) {
+          const shift = textWidth + 64;
+          const duration = Math.max(8, shift / 120);
+          ticker.style.setProperty('--shift', `${shift}px`);
+          ticker.style.setProperty('--duration', `${duration}s`);
+          ticker.classList.add('is-moving');
+        }
+      }
+
+      newPhraseBtn.addEventListener('click', () => {
+        const next = window.prompt('Escribe una nueva frase:', phrase.textContent);
+        if (next !== null) {
+          syncTickerText(next);
+          requestAnimationFrame(updateTickerMotion);
+        }
+      });
+
+      fontBtn.addEventListener('click', () => {
+        document.body.style.fontWeight = document.body.style.fontWeight === '800' ? '400' : '800';
+        requestAnimationFrame(updateTickerMotion);
+      });
+
+      window.addEventListener('resize', updateTickerMotion);
+      window.addEventListener('load', updateTickerMotion);
+    </script>
+  </body>
+</html>
