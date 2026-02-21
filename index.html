@@ -560,6 +560,69 @@
         return true;
       }
 
+      function expandRunsToChars() {
+        const chars = [];
+        for (const run of textRuns) {
+          for (const ch of run.text) {
+            chars.push({ ch, fontModeIndex: run.fontModeIndex });
+          }
+        }
+        return chars;
+      }
+
+      function compressCharsToRuns(chars) {
+        const nextRuns = [];
+        for (const item of chars) {
+          const last = nextRuns[nextRuns.length - 1];
+          if (last && last.fontModeIndex === item.fontModeIndex) {
+            last.text += item.ch;
+          } else {
+            nextRuns.push({ text: item.ch, fontModeIndex: item.fontModeIndex });
+          }
+        }
+        textRuns = nextRuns;
+      }
+
+      function getSelectionInLine() {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) {
+          return null;
+        }
+
+        const range = sel.getRangeAt(0);
+        if (!line.contains(range.startContainer) || !line.contains(range.endContainer)) {
+          return null;
+        }
+
+        const before = range.cloneRange();
+        before.selectNodeContents(line);
+        before.setEnd(range.startContainer, range.startOffset);
+        const start = before.toString().length;
+        const end = start + range.toString().length;
+        return { start, end, collapsed: range.collapsed };
+      }
+
+      function replaceRange(start, end, insertedText) {
+        const chars = expandRunsToChars();
+        const injected = [...insertedText].map((ch) => ({ ch, fontModeIndex: currentFontModeIndex }));
+        chars.splice(start, end - start, ...injected);
+        compressCharsToRuns(chars);
+      }
+
+      function selectAllLineText() {
+        if (line.textContent.length === 0) {
+          return;
+        }
+        const selection = window.getSelection();
+        if (!selection) {
+          return;
+        }
+        const range = document.createRange();
+        range.selectNodeContents(line);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+
       function startAudio() {
         if (audioReady) {
           return Promise.resolve();
@@ -689,7 +752,15 @@
           return;
         }
 
-        if (event.ctrlKey || event.metaKey || event.altKey) {
+        if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+          if (event.key.toLowerCase() === 'a') {
+            event.preventDefault();
+            selectAllLineText();
+          }
+          return;
+        }
+
+        if (event.altKey) {
           return;
         }
 
@@ -710,6 +781,14 @@
         if (event.key === 'Backspace') {
           const isFirstInteraction = enterWritingMode(false);
           ticker.classList.remove('idle');
+          const selected = getSelectionInLine();
+          if (selected && selected.start !== selected.end) {
+            event.preventDefault();
+            replaceRange(selected.start, selected.end, '');
+            render();
+            return;
+          }
+
           if (textRuns.length === 0) {
             if (isFirstInteraction) {
               render();
@@ -727,7 +806,12 @@
           enterWritingMode(false);
           ticker.classList.remove('idle');
           void startAudio();
-          appendToRuns(' ');
+          const selected = getSelectionInLine();
+          if (selected) {
+            replaceRange(selected.start, selected.end, ' ');
+          } else {
+            appendToRuns(' ');
+          }
           render();
           return;
         }
@@ -736,7 +820,12 @@
         if (/^[a-z]$/.test(normalized)) {
           enterWritingMode(false);
           ticker.classList.remove('idle');
-          appendToRuns(event.key);
+          const selected = getSelectionInLine();
+          if (selected) {
+            replaceRange(selected.start, selected.end, event.key);
+          } else {
+            appendToRuns(event.key);
+          }
           render();
           if (audioReady) {
             playLetterSound(event.key);
@@ -751,7 +840,12 @@
         if (event.key.length === 1) {
           enterWritingMode(false);
           ticker.classList.remove('idle');
-          appendToRuns(event.key);
+          const selected = getSelectionInLine();
+          if (selected) {
+            replaceRange(selected.start, selected.end, event.key);
+          } else {
+            appendToRuns(event.key);
+          }
           render();
         }
       });
