@@ -719,20 +719,26 @@
         }
 
         const normalized = normalizeKeyToLetter(event.key);
-        if (!/^[a-z]$/.test(normalized)) {
+        if (/^[a-z]$/.test(normalized)) {
+          enterWritingMode(false);
+          ticker.classList.remove('idle');
+          appendToRuns(event.key);
+          render();
+          if (audioReady) {
+            playLetterSound(event.key);
+          } else {
+            void startAudio().then(() => {
+              playLetterSound(event.key);
+            });
+          }
           return;
         }
 
-        enterWritingMode(false);
-        ticker.classList.remove('idle');
-        appendToRuns(event.key);
-        render();
-        if (audioReady) {
-          playLetterSound(event.key);
-        } else {
-          void startAudio().then(() => {
-            playLetterSound(event.key);
-          });
+        if (event.key.length === 1) {
+          enterWritingMode(false);
+          ticker.classList.remove('idle');
+          appendToRuns(event.key);
+          render();
         }
       });
 
