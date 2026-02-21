@@ -93,13 +93,14 @@
       }
 
       .ticker-viewport {
+        height: clamp(3.2rem, 9vw, 9rem);
         overflow: hidden;
+        display: flex;
+        align-items: center;
       }
 
       .ticker {
-        display: inline-flex;
-        align-items: center;
-        gap: 4rem;
+        display: inline-block;
         white-space: nowrap;
         font-size: clamp(3rem, 9vw, 9rem);
         line-height: 1;
@@ -234,8 +235,7 @@
       <section class="text-zone" aria-label="Frase principal">
         <div class="ticker-viewport">
           <div id="ticker" class="ticker is-placeholder">
-            <span id="phrase"></span>
-            <span id="phraseEcho" aria-hidden="true"></span>
+            <span id="line"></span>
           </div>
         </div>
         <p id="startHint" class="start-hint">ESCRIBE PARA INICIAR</p>
@@ -257,8 +257,7 @@
       const ticker = document.getElementById('ticker');
       const tickerViewport = document.querySelector('.ticker-viewport');
       const textZone = document.querySelector('.text-zone');
-      const phrase = document.getElementById('phrase');
-      const phraseEcho = document.getElementById('phraseEcho');
+      const line = document.getElementById('line');
       const startHint = document.getElementById('startHint');
       const newPhraseBtn = document.getElementById('newPhraseBtn');
       const fontBtn = document.getElementById('fontBtn');
@@ -274,7 +273,7 @@
         'MANTEN LA ENERGIA ARRIBA'
       ];
       let currentSuggestion = '';
-      let typedSuffix = '';
+      let displayText = '';
       let hasStartedTyping = false;
       let hasInteracted = false;
       let synth = null;
@@ -293,37 +292,40 @@
         return next;
       }
 
-      function renderPhrase() {
-        const composed = `${currentSuggestion}${typedSuffix}`;
-        phrase.textContent = composed;
-        phraseEcho.textContent = composed;
-        ticker.classList.toggle('is-placeholder', !hasStartedTyping);
-        startHint.classList.toggle('is-hidden', hasStartedTyping);
-      }
-
       function updateTickerMotion(restart = false) {
         ticker.classList.remove('is-moving');
         ticker.style.removeProperty('--shift');
         ticker.style.removeProperty('--duration');
 
         if (hasStartedTyping) {
+          const overflow = Math.max(0, line.scrollWidth - tickerViewport.clientWidth);
+          ticker.style.transform = `translateX(${-overflow}px)`;
           return;
         }
+
+        ticker.style.transform = 'translateX(0)';
 
         if (restart) {
           void ticker.offsetWidth;
         }
 
         const containerWidth = tickerViewport.clientWidth;
-        const textWidth = phrase.getBoundingClientRect().width;
+        const textWidth = line.scrollWidth;
 
         if (textWidth > containerWidth) {
-          const shift = textWidth + 64;
+          const shift = textWidth - containerWidth + 64;
           const duration = Math.max(8, shift / 120);
           ticker.style.setProperty('--shift', `${shift}px`);
           ticker.style.setProperty('--duration', `${duration}s`);
           ticker.classList.add('is-moving');
         }
+      }
+
+      function render(restartMotion = true) {
+        line.textContent = displayText;
+        ticker.classList.toggle('is-placeholder', !hasStartedTyping);
+        startHint.classList.toggle('is-hidden', hasInteracted);
+        requestAnimationFrame(() => updateTickerMotion(restartMotion));
       }
 
       function normalizeKeyToLetter(value) {
@@ -388,29 +390,29 @@
         synth.triggerAttackRelease(note, '8n');
       }
 
-      function enterWritingMode() {
+      function enterWritingMode(renderNow = true) {
         if (hasInteracted) {
-          return;
+          return false;
         }
 
         hasInteracted = true;
         hasStartedTyping = true;
-        currentSuggestion = '';
-        typedSuffix = '';
-        renderPhrase();
-        requestAnimationFrame(() => updateTickerMotion(true));
+        displayText = '';
+        if (renderNow) {
+          render(true);
+        }
+        return true;
       }
 
       function resetPhraseState() {
         currentSuggestion = getRandomSuggestion();
-        typedSuffix = '';
+        displayText = currentSuggestion;
         hasStartedTyping = false;
         hasInteracted = false;
         if (synth) {
           synth.releaseAll();
         }
-        renderPhrase();
-        requestAnimationFrame(() => updateTickerMotion(true));
+        render(true);
       }
 
       newPhraseBtn.addEventListener('click', resetPhraseState);
@@ -442,24 +444,25 @@
         }
 
         if (event.key === 'Backspace') {
-          enterWritingMode();
-          if (typedSuffix.length === 0) {
+          const isFirstInteraction = enterWritingMode(false);
+          if (displayText.length === 0) {
+            if (isFirstInteraction) {
+              render(true);
+            }
             return;
           }
 
           event.preventDefault();
-          typedSuffix = typedSuffix.slice(0, -1);
-          renderPhrase();
-          requestAnimationFrame(() => updateTickerMotion(true));
+          displayText = displayText.slice(0, -1);
+          render(true);
           return;
         }
 
         if (event.key === ' ') {
-          enterWritingMode();
+          enterWritingMode(false);
           void startAudio();
-          typedSuffix += ' ';
-          renderPhrase();
-          requestAnimationFrame(() => updateTickerMotion(true));
+          displayText += ' ';
+          render(true);
           return;
         }
 
@@ -468,10 +471,9 @@
           return;
         }
 
-        enterWritingMode();
-        typedSuffix += event.key;
-        renderPhrase();
-        requestAnimationFrame(() => updateTickerMotion(true));
+        enterWritingMode(false);
+        displayText += event.key;
+        render(true);
         if (audioReady) {
           playLetterSound(event.key);
         } else {
