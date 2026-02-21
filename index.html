@@ -249,6 +249,16 @@
         right: 24px;
       }
 
+      .mobile-typing-proxy {
+        position: fixed;
+        left: -1000px;
+        bottom: -1000px;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+
       @media (max-width: 768px) {
         .text-zone {
           top: 44%;
@@ -309,6 +319,18 @@
 
       <button id="fontBtn" class="bottom-btn btn-left" type="button">TIPOGRAFÍA</button>
       <button id="newPhraseBtn" class="bottom-btn btn-right" type="button">NUEVA FRASE</button>
+      <input
+        id="mobileTypingProxy"
+        class="mobile-typing-proxy"
+        type="text"
+        inputmode="text"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="none"
+        spellcheck="false"
+        tabindex="-1"
+        aria-hidden="true"
+      />
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
@@ -325,6 +347,7 @@
       const vibeSelect = document.getElementById('vibe');
       const spaceSlider = document.getElementById('space');
       const volumeSlider = document.getElementById('volume');
+      const mobileTypingProxy = document.getElementById('mobileTypingProxy');
       const scaleNotes = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'];
       const fontModes = [
         {
@@ -711,6 +734,18 @@
         return true;
       }
 
+      function isTouchKeyboardDevice() {
+        return window.matchMedia('(pointer: coarse)').matches;
+      }
+
+      function focusMobileTypingProxy() {
+        if (!isTouchKeyboardDevice()) {
+          return;
+        }
+        mobileTypingProxy.focus({ preventScroll: true });
+        mobileTypingProxy.value = '';
+      }
+
       function resetPhraseState() {
         currentSuggestion = getRandomSuggestion();
         setRunsFromText(currentSuggestion);
@@ -727,7 +762,10 @@
 
       newPhraseBtn.addEventListener('click', resetPhraseState);
       newPhraseBtn.addEventListener('pointerdown', (event) => event.preventDefault());
-      textZone.addEventListener('click', enterWritingMode);
+      textZone.addEventListener('click', () => {
+        enterWritingMode();
+        focusMobileTypingProxy();
+      });
       vibeSelect.addEventListener('change', () => {
         if (synth) {
           synth.set({ oscillator: { type: vibeSelect.value } });
@@ -745,7 +783,82 @@
         applyFontMode(currentFontModeIndex + 1);
         fontBtn.blur();
         requestAnimationFrame(updateScrollToEnd);
+        focusMobileTypingProxy();
       });
+
+      function handleBackspaceAction() {
+        const isFirstInteraction = enterWritingMode(false);
+        ticker.classList.remove('idle');
+        const selected = getSelectionInLine();
+        if (selected && selected.start !== selected.end) {
+          replaceRange(selected.start, selected.end, '');
+          render();
+          return true;
+        }
+
+        if (textRuns.length === 0) {
+          if (isFirstInteraction) {
+            render();
+          }
+          return true;
+        }
+
+        removeLastRunChar();
+        render();
+        return true;
+      }
+
+      function handlePrintableKey(key) {
+        if (key.length !== 1) {
+          return false;
+        }
+
+        if (key === ' ') {
+          enterWritingMode(false);
+          ticker.classList.remove('idle');
+          void startAudio();
+          const selected = getSelectionInLine();
+          if (selected) {
+            replaceRange(selected.start, selected.end, ' ');
+          } else {
+            appendToRuns(' ');
+          }
+          render();
+          return true;
+        }
+
+        const normalized = normalizeKeyToLetter(key);
+        if (/^[a-z]$/.test(normalized)) {
+          enterWritingMode(false);
+          ticker.classList.remove('idle');
+          const selected = getSelectionInLine();
+          if (selected) {
+            replaceRange(selected.start, selected.end, key);
+          } else {
+            appendToRuns(key);
+          }
+          render();
+          if (audioReady) {
+            playLetterSound(key);
+          } else {
+            void startAudio().then(() => {
+              playLetterSound(key);
+            });
+          }
+          return true;
+        }
+
+        enterWritingMode(false);
+        ticker.classList.remove('idle');
+        const selected = getSelectionInLine();
+        if (selected) {
+          replaceRange(selected.start, selected.end, key);
+        } else {
+          appendToRuns(key);
+        }
+        render();
+        return true;
+      }
 
       window.addEventListener('keydown', (event) => {
         if (event.repeat) {
@@ -769,6 +882,9 @@
           return;
         }
         if (target instanceof HTMLInputElement) {
+          if (target === mobileTypingProxy) {
+            return;
+          }
           const textInputTypes = ['text', 'search', 'email', 'password', 'url', 'tel', 'number'];
           if (textInputTypes.includes(target.type)) {
             return;
@@ -779,75 +895,31 @@
         }
 
         if (event.key === 'Backspace') {
-          const isFirstInteraction = enterWritingMode(false);
-          ticker.classList.remove('idle');
-          const selected = getSelectionInLine();
-          if (selected && selected.start !== selected.end) {
-            event.preventDefault();
-            replaceRange(selected.start, selected.end, '');
-            render();
-            return;
-          }
-
-          if (textRuns.length === 0) {
-            if (isFirstInteraction) {
-              render();
-            }
-            return;
-          }
-
           event.preventDefault();
-          removeLastRunChar();
-          render();
+          handleBackspaceAction();
           return;
         }
 
-        if (event.key === ' ') {
-          enterWritingMode(false);
-          ticker.classList.remove('idle');
-          void startAudio();
-          const selected = getSelectionInLine();
-          if (selected) {
-            replaceRange(selected.start, selected.end, ' ');
-          } else {
-            appendToRuns(' ');
-          }
-          render();
+        if (handlePrintableKey(event.key)) {
           return;
         }
+      });
 
-        const normalized = normalizeKeyToLetter(event.key);
-        if (/^[a-z]$/.test(normalized)) {
-          enterWritingMode(false);
-          ticker.classList.remove('idle');
-          const selected = getSelectionInLine();
-          if (selected) {
-            replaceRange(selected.start, selected.end, event.key);
-          } else {
-            appendToRuns(event.key);
-          }
-          render();
-          if (audioReady) {
-            playLetterSound(event.key);
-          } else {
-            void startAudio().then(() => {
-              playLetterSound(event.key);
-            });
-          }
+      mobileTypingProxy.addEventListener('keydown', (event) => {
+        if (event.key === 'Backspace') {
+          event.preventDefault();
+          handleBackspaceAction();
+        }
+      });
+
+      mobileTypingProxy.addEventListener('input', () => {
+        if (!mobileTypingProxy.value) {
           return;
         }
-
-        if (event.key.length === 1) {
-          enterWritingMode(false);
-          ticker.classList.remove('idle');
-          const selected = getSelectionInLine();
-          if (selected) {
-            replaceRange(selected.start, selected.end, event.key);
-          } else {
-            appendToRuns(event.key);
-          }
-          render();
+        for (const ch of mobileTypingProxy.value) {
+          handlePrintableKey(ch);
         }
+        mobileTypingProxy.value = '';
       });
 
       window.addEventListener('resize', updateScrollToEnd);
