@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Raleway:wght@400;700&family=Space+Grotesk:wght@400;700&family=Syne:wght@400;700;800&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -328,9 +328,27 @@
       const fontModes = [
         {
           mood: 'EXPERIMENTAL',
-          buttonLabel: 'TIPOGRAFÍA',
+          buttonLabel: 'TIPO: EXP',
           family: "'Syne', sans-serif",
           sound: { attack: 0.01, decay: 0.1, sustain: 0.25, release: 1.1, noteLength: '8n', transpose: 0, velocity: 0.85 }
+        },
+        {
+          mood: 'CLASICA',
+          buttonLabel: 'TIPO: CLAS',
+          family: "'Playfair Display', serif",
+          sound: { attack: 0.03, decay: 0.2, sustain: 0.35, release: 1.6, noteLength: '4n', transpose: -12, velocity: 0.75 }
+        },
+        {
+          mood: 'TECHNO',
+          buttonLabel: 'TIPO: TECH',
+          family: "'Space Grotesk', sans-serif",
+          sound: { attack: 0.002, decay: 0.08, sustain: 0.2, release: 0.45, noteLength: '16n', transpose: 12, velocity: 0.95 }
+        },
+        {
+          mood: 'POP',
+          buttonLabel: 'TIPO: POP',
+          family: "'Raleway', sans-serif",
+          sound: { attack: 0.008, decay: 0.12, sustain: 0.28, release: 0.9, noteLength: '8n', transpose: 0, velocity: 0.9 }
         }
       ];
       const suggestedPhrases = [
@@ -410,8 +428,7 @@
         for (const run of textRuns) {
           const segment = document.createElement('span');
           segment.className = 'line-segment';
-          const runFontIndex = run.fontModeIndex;
-          segment.style.fontFamily = fontModes[runFontIndex].family;
+          segment.style.fontFamily = hasStartedTyping ? fontModes[run.fontModeIndex].family : "'Syne', sans-serif";
           segment.textContent = run.text;
           fragment.appendChild(segment);
         }
@@ -631,7 +648,7 @@
       volumeSlider.addEventListener('input', setSynthVolume);
 
       fontBtn.addEventListener('click', () => {
-        applyFontMode(0);
+        applyFontMode(currentFontModeIndex + 1);
         fontBtn.blur();
         requestAnimationFrame(updateScrollToEnd);
       });
