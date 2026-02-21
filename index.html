@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Raleway:wght@400;700&family=Space+Grotesk:wght@400;700&family=Syne:wght@400;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -328,27 +328,9 @@
       const fontModes = [
         {
           mood: 'EXPERIMENTAL',
-          buttonLabel: 'TIPO: EXP',
+          buttonLabel: 'TIPOGRAFÍA',
           family: "'Syne', sans-serif",
           sound: { attack: 0.01, decay: 0.1, sustain: 0.25, release: 1.1, noteLength: '8n', transpose: 0, velocity: 0.85 }
-        },
-        {
-          mood: 'CLASICA',
-          buttonLabel: 'TIPO: CLAS',
-          family: "'Playfair Display', serif",
-          sound: { attack: 0.03, decay: 0.2, sustain: 0.35, release: 1.6, noteLength: '4n', transpose: -12, velocity: 0.75 }
-        },
-        {
-          mood: 'TECHNO',
-          buttonLabel: 'TIPO: TECH',
-          family: "'Space Grotesk', sans-serif",
-          sound: { attack: 0.002, decay: 0.08, sustain: 0.2, release: 0.45, noteLength: '16n', transpose: 12, velocity: 0.95 }
-        },
-        {
-          mood: 'POP',
-          buttonLabel: 'TIPO: POP',
-          family: "'Raleway', sans-serif",
-          sound: { attack: 0.008, decay: 0.12, sustain: 0.28, release: 0.9, noteLength: '8n', transpose: 0, velocity: 0.9 }
         }
       ];
       const suggestedPhrases = [
@@ -370,8 +352,7 @@
       let audioReady = false;
       let audioStartPromise = null;
       let currentFontModeIndex = 0;
-      let idleFontPreviewIndex = 0;
-      let idleFontTimer = null;
+      let kickRootNote = 'C2';
 
       function getRandomSuggestion() {
         if (suggestedPhrases.length === 1) {
@@ -429,7 +410,7 @@
         for (const run of textRuns) {
           const segment = document.createElement('span');
           segment.className = 'line-segment';
-          const runFontIndex = hasStartedTyping ? run.fontModeIndex : idleFontPreviewIndex;
+          const runFontIndex = run.fontModeIndex;
           segment.style.fontFamily = fontModes[runFontIndex].family;
           segment.textContent = run.text;
           fragment.appendChild(segment);
@@ -513,28 +494,6 @@
         }
       }
 
-      function startIdleFontPreview() {
-        if (idleFontTimer) {
-          return;
-        }
-
-        idleFontTimer = window.setInterval(() => {
-          if (hasStartedTyping) {
-            return;
-          }
-          idleFontPreviewIndex = (idleFontPreviewIndex + 1) % fontModes.length;
-          render();
-        }, 1500);
-      }
-
-      function stopIdleFontPreview() {
-        if (!idleFontTimer) {
-          return;
-        }
-        window.clearInterval(idleFontTimer);
-        idleFontTimer = null;
-      }
-
       function setRunsFromText(text) {
         textRuns = text ? [{ text, fontModeIndex: currentFontModeIndex }] : [];
       }
@@ -591,7 +550,8 @@
             kickSynth = new Tone.MembraneSynth().connect(drumGain);
             drumLoop = new Tone.Loop((time) => {
               const config = getDrumConfig(vibeSelect.value);
-              kickSynth.triggerAttackRelease(config.pitch, '16n', time, config.velocity);
+              const kickNote = kickRootNote || config.pitch;
+              kickSynth.triggerAttackRelease(kickNote, '16n', time, config.velocity);
             }, '1n').start(0);
             applyDrumConfig();
             if (Tone.Transport.state !== 'started') {
@@ -626,6 +586,7 @@
         if (totalTranspose !== 0) {
           note = Tone.Frequency(note).transpose(totalTranspose).toNote();
         }
+        kickRootNote = Tone.Frequency(note).transpose(-24).toNote();
         const velocity = Math.min(1, mode.sound.velocity + (isUpperCaseInput ? 0.08 : 0));
         synth.triggerAttackRelease(note, mode.sound.noteLength, undefined, velocity);
       }
@@ -638,7 +599,6 @@
         hasInteracted = true;
         hasStartedTyping = true;
         lineWrap.classList.remove('idle-moving');
-        stopIdleFontPreview();
         setRunsFromText('');
         if (renderNow) {
           render();
@@ -651,13 +611,12 @@
         setRunsFromText(currentSuggestion);
         hasStartedTyping = false;
         hasInteracted = false;
-        idleFontPreviewIndex = currentFontModeIndex;
         if (synth) {
           synth.releaseAll();
         }
+        kickRootNote = 'C2';
         lineWrap.style.transform = 'translateX(0)';
         ticker.classList.add('idle');
-        startIdleFontPreview();
         render();
       }
 
@@ -672,11 +631,7 @@
       volumeSlider.addEventListener('input', setSynthVolume);
 
       fontBtn.addEventListener('click', () => {
-        applyFontMode(currentFontModeIndex + 1);
-        if (!hasStartedTyping) {
-          idleFontPreviewIndex = currentFontModeIndex;
-          render();
-        }
+        applyFontMode(0);
         fontBtn.blur();
         requestAnimationFrame(updateScrollToEnd);
       });
