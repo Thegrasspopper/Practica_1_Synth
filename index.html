@@ -256,6 +256,7 @@
     <script>
       const ticker = document.getElementById('ticker');
       const tickerViewport = document.querySelector('.ticker-viewport');
+      const textZone = document.querySelector('.text-zone');
       const phrase = document.getElementById('phrase');
       const phraseEcho = document.getElementById('phraseEcho');
       const startHint = document.getElementById('startHint');
@@ -275,6 +276,7 @@
       let currentSuggestion = '';
       let typedSuffix = '';
       let hasStartedTyping = false;
+      let hasInteracted = false;
       let synth = null;
       let audioReady = false;
       let audioStartPromise = null;
@@ -386,10 +388,24 @@
         synth.triggerAttackRelease(note, '8n');
       }
 
+      function enterWritingMode() {
+        if (hasInteracted) {
+          return;
+        }
+
+        hasInteracted = true;
+        hasStartedTyping = true;
+        currentSuggestion = '';
+        typedSuffix = '';
+        renderPhrase();
+        requestAnimationFrame(() => updateTickerMotion(true));
+      }
+
       function resetPhraseState() {
         currentSuggestion = getRandomSuggestion();
         typedSuffix = '';
         hasStartedTyping = false;
+        hasInteracted = false;
         if (synth) {
           synth.releaseAll();
         }
@@ -398,6 +414,7 @@
       }
 
       newPhraseBtn.addEventListener('click', resetPhraseState);
+      textZone.addEventListener('click', enterWritingMode);
       vibeSelect.addEventListener('change', () => {
         if (synth) {
           synth.set({ oscillator: { type: vibeSelect.value } });
@@ -425,21 +442,21 @@
         }
 
         if (event.key === 'Backspace') {
+          enterWritingMode();
           if (typedSuffix.length === 0) {
             return;
           }
 
           event.preventDefault();
           typedSuffix = typedSuffix.slice(0, -1);
-          hasStartedTyping = typedSuffix.length > 0;
           renderPhrase();
           requestAnimationFrame(() => updateTickerMotion(true));
           return;
         }
 
         if (event.key === ' ') {
+          enterWritingMode();
           void startAudio();
-          hasStartedTyping = true;
           typedSuffix += ' ';
           renderPhrase();
           requestAnimationFrame(() => updateTickerMotion(true));
@@ -451,7 +468,7 @@
           return;
         }
 
-        hasStartedTyping = true;
+        enterWritingMode();
         typedSuffix += event.key;
         renderPhrase();
         requestAnimationFrame(() => updateTickerMotion(true));
