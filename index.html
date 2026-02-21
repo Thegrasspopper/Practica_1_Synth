@@ -544,12 +544,15 @@
         }
 
         const mode = getCurrentFontMode();
+        const isUpperCaseInput = inputChar === inputChar.toUpperCase() && inputChar !== inputChar.toLowerCase();
         const index = normalized.charCodeAt(0) - 97;
         let note = scaleNotes[index % scaleNotes.length];
-        if (mode.sound.transpose !== 0) {
-          note = Tone.Frequency(note).transpose(mode.sound.transpose).toNote();
+        const totalTranspose = mode.sound.transpose + (isUpperCaseInput ? 12 : 0);
+        if (totalTranspose !== 0) {
+          note = Tone.Frequency(note).transpose(totalTranspose).toNote();
         }
-        synth.triggerAttackRelease(note, mode.sound.noteLength, undefined, mode.sound.velocity);
+        const velocity = Math.min(1, mode.sound.velocity + (isUpperCaseInput ? 0.08 : 0));
+        synth.triggerAttackRelease(note, mode.sound.noteLength, undefined, velocity);
       }
 
       function enterWritingMode(renderNow = true) {
