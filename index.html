@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Raleway:wght@400;700&family=Space+Grotesk:wght@400;700&family=Syne:wght@400;700;800&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -320,6 +320,32 @@
       const vibeSelect = document.getElementById('vibe');
       const volumeSlider = document.getElementById('volume');
       const scaleNotes = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'];
+      const fontModes = [
+        {
+          mood: 'EXPERIMENTAL',
+          buttonLabel: 'TIPO: EXP',
+          family: "'Syne', sans-serif",
+          sound: { attack: 0.01, decay: 0.1, sustain: 0.25, release: 1.1, noteLength: '8n', transpose: 0, velocity: 0.85 }
+        },
+        {
+          mood: 'CLASICA',
+          buttonLabel: 'TIPO: CLAS',
+          family: "'Playfair Display', serif",
+          sound: { attack: 0.03, decay: 0.2, sustain: 0.35, release: 1.6, noteLength: '4n', transpose: -12, velocity: 0.75 }
+        },
+        {
+          mood: 'TECHNO',
+          buttonLabel: 'TIPO: TECH',
+          family: "'Space Grotesk', sans-serif",
+          sound: { attack: 0.002, decay: 0.08, sustain: 0.2, release: 0.45, noteLength: '16n', transpose: 12, velocity: 0.95 }
+        },
+        {
+          mood: 'POP',
+          buttonLabel: 'TIPO: POP',
+          family: "'Raleway', sans-serif",
+          sound: { attack: 0.008, decay: 0.12, sustain: 0.28, release: 0.9, noteLength: '8n', transpose: 0, velocity: 0.9 }
+        }
+      ];
       const suggestedPhrases = [
         'LA VIBRA ESTA EN EL AIRE',
         'TODO EMPIEZA CON UNA PALABRA',
@@ -335,6 +361,7 @@
       let synth = null;
       let audioReady = false;
       let audioStartPromise = null;
+      let currentFontModeIndex = 0;
 
       function getRandomSuggestion() {
         if (suggestedPhrases.length === 1) {
@@ -408,6 +435,29 @@
         synth.volume.value = decibels;
       }
 
+      function getCurrentFontMode() {
+        return fontModes[currentFontModeIndex];
+      }
+
+      function applyFontMode(index) {
+        currentFontModeIndex = (index + fontModes.length) % fontModes.length;
+        const mode = getCurrentFontMode();
+        document.body.style.fontFamily = mode.family;
+        fontBtn.textContent = mode.buttonLabel;
+        fontBtn.title = `TIPOGRAFIA ${mode.mood}`;
+
+        if (synth) {
+          synth.set({
+            envelope: {
+              attack: mode.sound.attack,
+              decay: mode.sound.decay,
+              sustain: mode.sound.sustain,
+              release: mode.sound.release
+            }
+          });
+        }
+      }
+
       function startAudio() {
         if (audioReady) {
           return Promise.resolve();
@@ -419,9 +469,15 @@
 
         audioStartPromise = Tone.start()
           .then(() => {
+            const mode = getCurrentFontMode();
             synth = new Tone.PolySynth(Tone.Synth, {
               oscillator: { type: vibeSelect.value },
-              envelope: { attack: 0.01, decay: 0.1, sustain: 0.25, release: 1.1 }
+              envelope: {
+                attack: mode.sound.attack,
+                decay: mode.sound.decay,
+                sustain: mode.sound.sustain,
+                release: mode.sound.release
+              }
             }).toDestination();
             setSynthVolume();
             audioReady = true;
@@ -444,9 +500,13 @@
           return;
         }
 
+        const mode = getCurrentFontMode();
         const index = normalized.charCodeAt(0) - 97;
-        const note = scaleNotes[index % scaleNotes.length];
-        synth.triggerAttackRelease(note, '8n');
+        let note = scaleNotes[index % scaleNotes.length];
+        if (mode.sound.transpose !== 0) {
+          note = Tone.Frequency(note).transpose(mode.sound.transpose).toNote();
+        }
+        synth.triggerAttackRelease(note, mode.sound.noteLength, undefined, mode.sound.velocity);
       }
 
       function enterWritingMode(renderNow = true) {
@@ -487,7 +547,7 @@
       volumeSlider.addEventListener('input', setSynthVolume);
 
       fontBtn.addEventListener('click', () => {
-        document.body.style.fontWeight = document.body.style.fontWeight === '800' ? '400' : '800';
+        applyFontMode(currentFontModeIndex + 1);
         requestAnimationFrame(updateScrollToEnd);
       });
 
@@ -549,7 +609,10 @@
       });
 
       window.addEventListener('resize', updateScrollToEnd);
-      window.addEventListener('load', resetPhraseState);
+      window.addEventListener('load', () => {
+        applyFontMode(0);
+        resetPhraseState();
+      });
     </script>
   </body>
 </html>
