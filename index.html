@@ -364,8 +364,9 @@
       let hasStartedTyping = false;
       let hasInteracted = false;
       let synth = null;
-      let droneOsc = null;
-      let droneGain = null;
+      let kickSynth = null;
+      let drumGain = null;
+      let drumLoop = null;
       let audioReady = false;
       let audioStartPromise = null;
       let currentFontModeIndex = 0;
@@ -393,26 +394,33 @@
       }
 
       function updateIdleAnimation() {
-        lineWrap.classList.remove('idle-moving');
-        lineWrap.style.removeProperty('--idle-shift');
-        lineWrap.style.removeProperty('--idle-duration');
-        lineWrap.style.transform = 'translateX(0)';
-
         if (hasStartedTyping) {
           return;
         }
 
         const overflow = Math.max(0, lineWrap.scrollWidth - tickerViewport.clientWidth);
         if (overflow === 0) {
+          lineWrap.classList.remove('idle-moving');
+          lineWrap.style.removeProperty('--idle-shift');
+          lineWrap.style.removeProperty('--idle-duration');
+          lineWrap.style.transform = 'translateX(0)';
           return;
         }
 
         const shift = overflow + 24;
         const duration = Math.max(8, shift / 90);
-        lineWrap.style.setProperty('--idle-shift', `${shift}px`);
-        lineWrap.style.setProperty('--idle-duration', `${duration}s`);
-        lineWrap.style.transform = 'translateX(0)';
-        lineWrap.classList.add('idle-moving');
+        const nextShift = `${shift}px`;
+        const nextDuration = `${duration}s`;
+        if (lineWrap.style.getPropertyValue('--idle-shift') !== nextShift) {
+          lineWrap.style.setProperty('--idle-shift', nextShift);
+        }
+        if (lineWrap.style.getPropertyValue('--idle-duration') !== nextDuration) {
+          lineWrap.style.setProperty('--idle-duration', nextDuration);
+        }
+        if (!lineWrap.classList.contains('idle-moving')) {
+          lineWrap.style.transform = 'translateX(0)';
+          lineWrap.classList.add('idle-moving');
+        }
       }
 
       function render() {
@@ -421,7 +429,8 @@
         for (const run of textRuns) {
           const segment = document.createElement('span');
           segment.className = 'line-segment';
-          segment.style.fontFamily = fontModes[run.fontModeIndex].family;
+          const runFontIndex = hasStartedTyping ? run.fontModeIndex : idleFontPreviewIndex;
+          segment.style.fontFamily = fontModes[runFontIndex].family;
           segment.textContent = run.text;
           fragment.appendChild(segment);
         }
@@ -429,11 +438,6 @@
         ticker.classList.toggle('is-placeholder', !hasStartedTyping);
         caret.classList.toggle('is-active', hasStartedTyping);
         startHint.classList.toggle('is-hidden', hasInteracted);
-        if (hasStartedTyping) {
-          ticker.style.removeProperty('font-family');
-        } else {
-          ticker.style.fontFamily = fontModes[idleFontPreviewIndex].family;
-        }
         requestAnimationFrame(hasStartedTyping ? updateScrollToEnd : updateIdleAnimation);
       }
 
@@ -454,10 +458,37 @@
         if (synth) {
           synth.volume.value = decibels;
         }
-        if (droneGain) {
-          const droneLevel = 0.015 + (amount / 100) * 0.05;
-          droneGain.gain.rampTo(droneLevel, 0.08);
+        if (drumGain) {
+          const drumLevel = 0.03 + (amount / 100) * 0.09;
+          drumGain.gain.rampTo(drumLevel, 0.08);
         }
+      }
+
+      function getDrumConfig(vibeType) {
+        if (vibeType === 'triangle') {
+          return { interval: '2n', pitch: 'G1', decay: 0.46, octaves: 2.2, velocity: 0.72 };
+        }
+        if (vibeType === 'sawtooth') {
+          return { interval: '4n', pitch: 'C1', decay: 0.34, octaves: 3.1, velocity: 0.82 };
+        }
+        if (vibeType === 'square') {
+          return { interval: '8n', pitch: 'A0', decay: 0.28, octaves: 3.6, velocity: 0.88 };
+        }
+        return { interval: '1n', pitch: 'C1', decay: 0.6, octaves: 1.8, velocity: 0.62 };
+      }
+
+      function applyDrumConfig() {
+        if (!kickSynth || !drumLoop) {
+          return;
+        }
+
+        const config = getDrumConfig(vibeSelect.value);
+        kickSynth.set({
+          pitchDecay: 0.02,
+          octaves: config.octaves,
+          envelope: { attack: 0.001, decay: config.decay, sustain: 0, release: 0.01 }
+        });
+        drumLoop.interval = config.interval;
       }
 
       function getCurrentFontMode() {
@@ -556,12 +587,16 @@
                 release: mode.sound.release
               }
             }).toDestination();
-            droneGain = new Tone.Gain(0).toDestination();
-            droneOsc = new Tone.Oscillator({
-              frequency: 'C2',
-              type: vibeSelect.value
-            }).connect(droneGain);
-            droneOsc.start();
+            drumGain = new Tone.Gain(0).toDestination();
+            kickSynth = new Tone.MembraneSynth().connect(drumGain);
+            drumLoop = new Tone.Loop((time) => {
+              const config = getDrumConfig(vibeSelect.value);
+              kickSynth.triggerAttackRelease(config.pitch, '16n', time, config.velocity);
+            }, '1n').start(0);
+            applyDrumConfig();
+            if (Tone.Transport.state !== 'started') {
+              Tone.Transport.start();
+            }
             setSynthVolume();
             audioReady = true;
           })
@@ -632,9 +667,7 @@
         if (synth) {
           synth.set({ oscillator: { type: vibeSelect.value } });
         }
-        if (droneOsc) {
-          droneOsc.type = vibeSelect.value;
-        }
+        applyDrumConfig();
       });
       volumeSlider.addEventListener('input', setSynthVolume);
 
