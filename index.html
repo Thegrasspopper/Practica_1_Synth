@@ -192,39 +192,6 @@
         right: 24px;
       }
 
-      .audio-gate {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(255, 255, 255, 0.95);
-        z-index: 20;
-      }
-
-      .audio-gate.is-hidden {
-        display: none;
-      }
-
-      .audio-start-btn {
-        min-width: min(70vw, 460px);
-        border: 2px solid var(--border);
-        background: var(--bg);
-        color: var(--fg);
-        font-family: inherit;
-        font-size: clamp(1.2rem, 3.8vw, 2.2rem);
-        letter-spacing: 0.12em;
-        font-weight: 800;
-        text-transform: uppercase;
-        padding: 20px 26px;
-        cursor: pointer;
-      }
-
-      .audio-start-btn:hover {
-        background: var(--fg);
-        color: var(--bg);
-      }
-
       @media (max-width: 768px) {
         .text-zone {
           top: 44%;
@@ -283,10 +250,6 @@
 
       <button id="fontBtn" class="bottom-btn btn-left" type="button">TIPOGRAFÍA</button>
       <button id="newPhraseBtn" class="bottom-btn btn-right" type="button">NUEVA FRASE</button>
-
-      <div id="audioGate" class="audio-gate">
-        <button id="audioStartBtn" class="audio-start-btn" type="button">INICIAR AUDIO</button>
-      </div>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
@@ -300,8 +263,6 @@
       const fontBtn = document.getElementById('fontBtn');
       const vibeSelect = document.getElementById('vibe');
       const volumeSlider = document.getElementById('volume');
-      const audioGate = document.getElementById('audioGate');
-      const audioStartBtn = document.getElementById('audioStartBtn');
       const scaleNotes = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'];
       const suggestedPhrases = [
         'LA VIBRA ESTA EN EL AIRE',
@@ -316,6 +277,7 @@
       let hasStartedTyping = false;
       let synth = null;
       let audioReady = false;
+      let audioStartPromise = null;
 
       function getRandomSuggestion() {
         if (suggestedPhrases.length === 1) {
@@ -341,6 +303,10 @@
         ticker.classList.remove('is-moving');
         ticker.style.removeProperty('--shift');
         ticker.style.removeProperty('--duration');
+
+        if (hasStartedTyping) {
+          return;
+        }
 
         if (restart) {
           void ticker.offsetWidth;
@@ -379,19 +345,30 @@
         synth.volume.value = decibels;
       }
 
-      async function startAudio() {
+      function startAudio() {
         if (audioReady) {
-          return;
+          return Promise.resolve();
         }
 
-        await Tone.start();
-        synth = new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: vibeSelect.value },
-          envelope: { attack: 0.01, decay: 0.1, sustain: 0.25, release: 1.1 }
-        }).toDestination();
-        setSynthVolume();
-        audioReady = true;
-        audioGate.classList.add('is-hidden');
+        if (audioStartPromise) {
+          return audioStartPromise;
+        }
+
+        audioStartPromise = Tone.start()
+          .then(() => {
+            synth = new Tone.PolySynth(Tone.Synth, {
+              oscillator: { type: vibeSelect.value },
+              envelope: { attack: 0.01, decay: 0.1, sustain: 0.25, release: 1.1 }
+            }).toDestination();
+            setSynthVolume();
+            audioReady = true;
+          })
+          .catch(() => {})
+          .finally(() => {
+            audioStartPromise = null;
+          });
+
+        return audioStartPromise;
       }
 
       function playLetterSound(inputChar) {
@@ -427,7 +404,6 @@
         }
       });
       volumeSlider.addEventListener('input', setSynthVolume);
-      audioStartBtn.addEventListener('click', startAudio);
 
       fontBtn.addEventListener('click', () => {
         document.body.style.fontWeight = document.body.style.fontWeight === '800' ? '400' : '800';
@@ -462,6 +438,7 @@
         }
 
         if (event.key === ' ') {
+          void startAudio();
           hasStartedTyping = true;
           typedSuffix += ' ';
           renderPhrase();
@@ -478,7 +455,13 @@
         typedSuffix += event.key;
         renderPhrase();
         requestAnimationFrame(() => updateTickerMotion(true));
-        playLetterSound(event.key);
+        if (audioReady) {
+          playLetterSound(event.key);
+        } else {
+          void startAudio().then(() => {
+            playLetterSound(event.key);
+          });
+        }
       });
 
       window.addEventListener('resize', () => updateTickerMotion(false));
