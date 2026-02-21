@@ -170,10 +170,10 @@
 
       @keyframes idle-marquee {
         from {
-          transform: translateX(calc(-1 * var(--idle-shift, 0px)));
+          transform: translateX(0);
         }
         to {
-          transform: translateX(0);
+          transform: translateX(calc(-1 * var(--idle-shift, 0px)));
         }
       }
 
@@ -375,7 +375,7 @@
         const duration = Math.max(8, shift / 90);
         lineWrap.style.setProperty('--idle-shift', `${shift}px`);
         lineWrap.style.setProperty('--idle-duration', `${duration}s`);
-        lineWrap.style.transform = `translateX(${-shift}px)`;
+        lineWrap.style.transform = 'translateX(0)';
         lineWrap.classList.add('idle-moving');
       }
 
