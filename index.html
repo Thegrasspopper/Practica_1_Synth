@@ -106,6 +106,10 @@
         will-change: transform;
       }
 
+      .line-wrap.idle-moving {
+        animation: idle-marquee var(--idle-duration, 10s) linear infinite alternate;
+      }
+
       .ticker {
         display: inline-block;
         white-space: nowrap;
@@ -136,6 +140,15 @@
         to {
           letter-spacing: 0.005em;
           opacity: 1;
+        }
+      }
+
+      @keyframes idle-marquee {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(calc(-1 * var(--idle-shift, 0px)));
         }
       }
 
@@ -309,15 +322,40 @@
       }
 
       function updateScrollToEnd() {
+        lineWrap.classList.remove('idle-moving');
+        lineWrap.style.removeProperty('--idle-shift');
+        lineWrap.style.removeProperty('--idle-duration');
         const overflow = Math.max(0, lineWrap.scrollWidth - tickerViewport.clientWidth);
         lineWrap.style.transform = `translateX(${-overflow}px)`;
+      }
+
+      function updateIdleAnimation() {
+        lineWrap.classList.remove('idle-moving');
+        lineWrap.style.removeProperty('--idle-shift');
+        lineWrap.style.removeProperty('--idle-duration');
+        lineWrap.style.transform = 'translateX(0)';
+
+        if (hasStartedTyping) {
+          return;
+        }
+
+        const overflow = Math.max(0, lineWrap.scrollWidth - tickerViewport.clientWidth);
+        if (overflow === 0) {
+          return;
+        }
+
+        const shift = overflow + 24;
+        const duration = Math.max(8, shift / 90);
+        lineWrap.style.setProperty('--idle-shift', `${shift}px`);
+        lineWrap.style.setProperty('--idle-duration', `${duration}s`);
+        lineWrap.classList.add('idle-moving');
       }
 
       function render() {
         line.textContent = displayText;
         ticker.classList.toggle('is-placeholder', !hasStartedTyping);
         startHint.classList.toggle('is-hidden', hasInteracted);
-        requestAnimationFrame(updateScrollToEnd);
+        requestAnimationFrame(hasStartedTyping ? updateScrollToEnd : updateIdleAnimation);
       }
 
       function normalizeKeyToLetter(value) {
@@ -389,6 +427,7 @@
 
         hasInteracted = true;
         hasStartedTyping = true;
+        lineWrap.classList.remove('idle-moving');
         displayText = '';
         if (renderNow) {
           render();
