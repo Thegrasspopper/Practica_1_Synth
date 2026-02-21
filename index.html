@@ -97,6 +97,13 @@
         overflow: hidden;
         display: flex;
         align-items: center;
+        justify-content: flex-start;
+      }
+
+      .line-wrap {
+        display: inline-block;
+        transform: translateX(0);
+        will-change: transform;
       }
 
       .ticker {
@@ -106,23 +113,24 @@
         line-height: 1;
         font-weight: 800;
         letter-spacing: -0.02em;
-        will-change: transform;
       }
 
       .ticker.is-placeholder {
         color: #b8b8b8;
       }
 
-      .ticker.is-moving {
-        animation: slide-left var(--duration, 10s) linear infinite;
+      .ticker.idle .line-text {
+        animation: idle-breathe 2.4s ease-in-out infinite alternate;
       }
 
-      @keyframes slide-left {
+      @keyframes idle-breathe {
         from {
-          transform: translateX(0);
+          letter-spacing: -0.02em;
+          opacity: 0.88;
         }
         to {
-          transform: translateX(calc(-1 * var(--shift, 0px)));
+          letter-spacing: 0.005em;
+          opacity: 1;
         }
       }
 
@@ -234,8 +242,10 @@
 
       <section class="text-zone" aria-label="Frase principal">
         <div class="ticker-viewport">
-          <div id="ticker" class="ticker is-placeholder">
-            <span id="line"></span>
+          <div id="lineWrap" class="line-wrap">
+            <div id="ticker" class="ticker is-placeholder idle">
+              <span id="line" class="line-text"></span>
+            </div>
           </div>
         </div>
         <p id="startHint" class="start-hint">ESCRIBE PARA INICIAR</p>
@@ -256,6 +266,7 @@
     <script>
       const ticker = document.getElementById('ticker');
       const tickerViewport = document.querySelector('.ticker-viewport');
+      const lineWrap = document.getElementById('lineWrap');
       const textZone = document.querySelector('.text-zone');
       const line = document.getElementById('line');
       const startHint = document.getElementById('startHint');
@@ -292,40 +303,16 @@
         return next;
       }
 
-      function updateTickerMotion(restart = false) {
-        ticker.classList.remove('is-moving');
-        ticker.style.removeProperty('--shift');
-        ticker.style.removeProperty('--duration');
-
-        if (hasStartedTyping) {
-          const overflow = Math.max(0, line.scrollWidth - tickerViewport.clientWidth);
-          ticker.style.transform = `translateX(${-overflow}px)`;
-          return;
-        }
-
-        ticker.style.transform = 'translateX(0)';
-
-        if (restart) {
-          void ticker.offsetWidth;
-        }
-
-        const containerWidth = tickerViewport.clientWidth;
-        const textWidth = line.scrollWidth;
-
-        if (textWidth > containerWidth) {
-          const shift = textWidth - containerWidth + 64;
-          const duration = Math.max(8, shift / 120);
-          ticker.style.setProperty('--shift', `${shift}px`);
-          ticker.style.setProperty('--duration', `${duration}s`);
-          ticker.classList.add('is-moving');
-        }
+      function updateScrollToEnd() {
+        const overflow = Math.max(0, line.scrollWidth - tickerViewport.clientWidth);
+        lineWrap.style.transform = `translateX(${-overflow}px)`;
       }
 
-      function render(restartMotion = true) {
+      function render() {
         line.textContent = displayText;
         ticker.classList.toggle('is-placeholder', !hasStartedTyping);
         startHint.classList.toggle('is-hidden', hasInteracted);
-        requestAnimationFrame(() => updateTickerMotion(restartMotion));
+        requestAnimationFrame(updateScrollToEnd);
       }
 
       function normalizeKeyToLetter(value) {
@@ -399,7 +386,7 @@
         hasStartedTyping = true;
         displayText = '';
         if (renderNow) {
-          render(true);
+          render();
         }
         return true;
       }
@@ -412,7 +399,9 @@
         if (synth) {
           synth.releaseAll();
         }
-        render(true);
+        lineWrap.style.transform = 'translateX(0)';
+        ticker.classList.add('idle');
+        render();
       }
 
       newPhraseBtn.addEventListener('click', resetPhraseState);
@@ -426,7 +415,7 @@
 
       fontBtn.addEventListener('click', () => {
         document.body.style.fontWeight = document.body.style.fontWeight === '800' ? '400' : '800';
-        requestAnimationFrame(() => updateTickerMotion(true));
+        requestAnimationFrame(updateScrollToEnd);
       });
 
       window.addEventListener('keydown', (event) => {
@@ -445,24 +434,26 @@
 
         if (event.key === 'Backspace') {
           const isFirstInteraction = enterWritingMode(false);
+          ticker.classList.remove('idle');
           if (displayText.length === 0) {
             if (isFirstInteraction) {
-              render(true);
+              render();
             }
             return;
           }
 
           event.preventDefault();
           displayText = displayText.slice(0, -1);
-          render(true);
+          render();
           return;
         }
 
         if (event.key === ' ') {
           enterWritingMode(false);
+          ticker.classList.remove('idle');
           void startAudio();
           displayText += ' ';
-          render(true);
+          render();
           return;
         }
 
@@ -472,8 +463,9 @@
         }
 
         enterWritingMode(false);
+        ticker.classList.remove('idle');
         displayText += event.key;
-        render(true);
+        render();
         if (audioReady) {
           playLetterSound(event.key);
         } else {
@@ -483,7 +475,7 @@
         }
       });
 
-      window.addEventListener('resize', () => updateTickerMotion(false));
+      window.addEventListener('resize', updateScrollToEnd);
       window.addEventListener('load', resetPhraseState);
     </script>
   </body>
