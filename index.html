@@ -123,6 +123,11 @@
         animation: idle-breathe 2.4s ease-in-out infinite alternate;
       }
 
+      .line-text {
+        display: inline-block;
+        padding-right: 0.08em;
+      }
+
       @keyframes idle-breathe {
         from {
           letter-spacing: -0.02em;
@@ -304,7 +309,7 @@
       }
 
       function updateScrollToEnd() {
-        const overflow = Math.max(0, line.scrollWidth - tickerViewport.clientWidth);
+        const overflow = Math.max(0, lineWrap.scrollWidth - tickerViewport.clientWidth);
         lineWrap.style.transform = `translateX(${-overflow}px)`;
       }
 
