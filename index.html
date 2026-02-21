@@ -323,6 +323,7 @@
       const newPhraseBtn = document.getElementById('newPhraseBtn');
       const fontBtn = document.getElementById('fontBtn');
       const vibeSelect = document.getElementById('vibe');
+      const spaceSlider = document.getElementById('space');
       const volumeSlider = document.getElementById('volume');
       const scaleNotes = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'];
       const fontModes = [
@@ -367,6 +368,9 @@
       let kickSynth = null;
       let drumGain = null;
       let drumLoop = null;
+      let mixBus = null;
+      let dryGain = null;
+      let reverbFx = null;
       let audioReady = false;
       let audioStartPromise = null;
       let currentFontModeIndex = 0;
@@ -457,9 +461,23 @@
           synth.volume.value = decibels;
         }
         if (drumGain) {
-          const drumLevel = 0.03 + (amount / 100) * 0.09;
+          const drumLevel = 0.06 + (amount / 100) * 0.14;
           drumGain.gain.rampTo(drumLevel, 0.08);
         }
+      }
+
+      function setSpaceEffect() {
+        if (!reverbFx || !dryGain) {
+          return;
+        }
+
+        const amount = Number(spaceSlider.value) / 100;
+        const wet = 0.02 + amount * 0.88;
+        const decay = 0.9 + amount * 8.5;
+        const dry = Math.max(0.55, 1 - amount * 0.35);
+        reverbFx.decay = decay;
+        reverbFx.wet.rampTo(wet, 0.1);
+        dryGain.gain.rampTo(dry, 0.1);
       }
 
       function getDrumConfig(vibeType) {
@@ -562,8 +580,14 @@
                 sustain: mode.sound.sustain,
                 release: mode.sound.release
               }
-            }).toDestination();
-            drumGain = new Tone.Gain(0).toDestination();
+            });
+            mixBus = new Tone.Gain(1);
+            dryGain = new Tone.Gain(1).toDestination();
+            reverbFx = new Tone.Reverb({ decay: 2.5, preDelay: 0.01, wet: 0.2 }).toDestination();
+            mixBus.connect(dryGain);
+            mixBus.connect(reverbFx);
+            synth.connect(mixBus);
+            drumGain = new Tone.Gain(0).connect(mixBus);
             kickSynth = new Tone.MembraneSynth().connect(drumGain);
             drumLoop = new Tone.Loop((time) => {
               const config = getDrumConfig(vibeSelect.value);
@@ -574,6 +598,7 @@
             if (Tone.Transport.state !== 'started') {
               Tone.Transport.start();
             }
+            setSpaceEffect();
             setSynthVolume();
             audioReady = true;
           })
@@ -645,6 +670,7 @@
         }
         applyDrumConfig();
       });
+      spaceSlider.addEventListener('input', setSpaceEffect);
       volumeSlider.addEventListener('input', setSynthVolume);
 
       fontBtn.addEventListener('click', () => {
