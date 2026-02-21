@@ -663,16 +663,21 @@
       }
 
       newPhraseBtn.addEventListener('click', resetPhraseState);
+      newPhraseBtn.addEventListener('pointerdown', (event) => event.preventDefault());
       textZone.addEventListener('click', enterWritingMode);
       vibeSelect.addEventListener('change', () => {
         if (synth) {
           synth.set({ oscillator: { type: vibeSelect.value } });
         }
         applyDrumConfig();
+        vibeSelect.blur();
       });
       spaceSlider.addEventListener('input', setSpaceEffect);
+      spaceSlider.addEventListener('change', () => spaceSlider.blur());
       volumeSlider.addEventListener('input', setSynthVolume);
+      volumeSlider.addEventListener('change', () => volumeSlider.blur());
 
+      fontBtn.addEventListener('pointerdown', (event) => event.preventDefault());
       fontBtn.addEventListener('click', () => {
         applyFontMode(currentFontModeIndex + 1);
         fontBtn.blur();
@@ -689,7 +694,16 @@
         }
 
         const target = event.target;
-        if (target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        if (target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) {
+          return;
+        }
+        if (target instanceof HTMLInputElement) {
+          const textInputTypes = ['text', 'search', 'email', 'password', 'url', 'tel', 'number'];
+          if (textInputTypes.includes(target.type)) {
+            return;
+          }
+        }
+        if (target instanceof HTMLSelectElement) {
           return;
         }
 
