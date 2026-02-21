@@ -364,6 +364,8 @@
       let hasStartedTyping = false;
       let hasInteracted = false;
       let synth = null;
+      let droneOsc = null;
+      let droneGain = null;
       let audioReady = false;
       let audioStartPromise = null;
       let currentFontModeIndex = 0;
@@ -447,13 +449,15 @@
       }
 
       function setSynthVolume() {
-        if (!synth) {
-          return;
-        }
-
         const amount = Number(volumeSlider.value);
         const decibels = -36 + amount * 0.36;
-        synth.volume.value = decibels;
+        if (synth) {
+          synth.volume.value = decibels;
+        }
+        if (droneGain) {
+          const droneLevel = 0.015 + (amount / 100) * 0.05;
+          droneGain.gain.rampTo(droneLevel, 0.08);
+        }
       }
 
       function getCurrentFontMode() {
@@ -552,6 +556,12 @@
                 release: mode.sound.release
               }
             }).toDestination();
+            droneGain = new Tone.Gain(0).toDestination();
+            droneOsc = new Tone.Oscillator({
+              frequency: 'C2',
+              type: vibeSelect.value
+            }).connect(droneGain);
+            droneOsc.start();
             setSynthVolume();
             audioReady = true;
           })
@@ -621,6 +631,9 @@
       vibeSelect.addEventListener('change', () => {
         if (synth) {
           synth.set({ oscillator: { type: vibeSelect.value } });
+        }
+        if (droneOsc) {
+          droneOsc.type = vibeSelect.value;
         }
       });
       volumeSlider.addEventListener('input', setSynthVolume);
