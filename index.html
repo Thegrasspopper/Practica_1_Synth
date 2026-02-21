@@ -77,7 +77,10 @@
         width: min(88vw, 1200px);
         border-top: 1px solid var(--border);
         border-bottom: 1px solid var(--border);
-        padding: 14px 0;
+        padding: 14px 0 10px;
+      }
+
+      .ticker-viewport {
         overflow: hidden;
       }
 
@@ -93,6 +96,10 @@
         will-change: transform;
       }
 
+      .ticker.is-placeholder {
+        color: #b8b8b8;
+      }
+
       .ticker.is-moving {
         animation: slide-left var(--duration, 10s) linear infinite;
       }
@@ -104,6 +111,20 @@
         to {
           transform: translateX(calc(-1 * var(--shift, 0px)));
         }
+      }
+
+      .start-hint {
+        margin: 12px 0 0;
+        text-align: center;
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        font-weight: 700;
+        color: #9d9d9d;
+        transition: opacity 0.2s ease;
+      }
+
+      .start-hint.is-hidden {
+        opacity: 0;
       }
 
       .center-bottom {
@@ -191,10 +212,13 @@
       </section>
 
       <section class="text-zone" aria-label="Frase principal">
-        <div id="ticker" class="ticker">
-          <span id="phrase">LA VIBRA EMPIEZA AQUI</span>
-          <span aria-hidden="true">LA VIBRA EMPIEZA AQUI</span>
+        <div class="ticker-viewport">
+          <div id="ticker" class="ticker is-placeholder">
+            <span id="phrase"></span>
+            <span id="phraseEcho" aria-hidden="true"></span>
+          </div>
         </div>
+        <p id="startHint" class="start-hint">ESCRIBE PARA INICIAR</p>
       </section>
 
       <section class="center-bottom" aria-label="Control de volumen">
@@ -210,22 +234,54 @@
 
     <script>
       const ticker = document.getElementById('ticker');
+      const tickerViewport = document.querySelector('.ticker-viewport');
       const phrase = document.getElementById('phrase');
+      const phraseEcho = document.getElementById('phraseEcho');
+      const startHint = document.getElementById('startHint');
       const newPhraseBtn = document.getElementById('newPhraseBtn');
       const fontBtn = document.getElementById('fontBtn');
+      const suggestedPhrases = [
+        'LA VIBRA ESTA EN EL AIRE',
+        'TODO EMPIEZA CON UNA PALABRA',
+        'DEJA QUE EL RITMO TE GUIE',
+        'RESPIRA Y SIGUE ESCRIBIENDO',
+        'HOY SUENA DISTINTO',
+        'MANTEN LA ENERGIA ARRIBA'
+      ];
+      let currentSuggestion = '';
+      let typedSuffix = '';
+      let hasStartedTyping = false;
 
-      function syncTickerText(value) {
-        const safeText = value.trim() || 'LA VIBRA EMPIEZA AQUI';
-        phrase.textContent = safeText;
-        ticker.children[1].textContent = safeText;
+      function getRandomSuggestion() {
+        if (suggestedPhrases.length === 1) {
+          return suggestedPhrases[0];
+        }
+
+        let next = suggestedPhrases[Math.floor(Math.random() * suggestedPhrases.length)];
+        while (next === currentSuggestion) {
+          next = suggestedPhrases[Math.floor(Math.random() * suggestedPhrases.length)];
+        }
+        return next;
       }
 
-      function updateTickerMotion() {
+      function renderPhrase() {
+        const composed = `${currentSuggestion}${typedSuffix}`;
+        phrase.textContent = composed;
+        phraseEcho.textContent = composed;
+        ticker.classList.toggle('is-placeholder', !hasStartedTyping);
+        startHint.classList.toggle('is-hidden', hasStartedTyping);
+      }
+
+      function updateTickerMotion(restart = false) {
         ticker.classList.remove('is-moving');
         ticker.style.removeProperty('--shift');
         ticker.style.removeProperty('--duration');
 
-        const containerWidth = ticker.parentElement.clientWidth;
+        if (restart) {
+          void ticker.offsetWidth;
+        }
+
+        const containerWidth = tickerViewport.clientWidth;
         const textWidth = phrase.getBoundingClientRect().width;
 
         if (textWidth > containerWidth) {
@@ -237,21 +293,62 @@
         }
       }
 
-      newPhraseBtn.addEventListener('click', () => {
-        const next = window.prompt('Escribe una nueva frase:', phrase.textContent);
-        if (next !== null) {
-          syncTickerText(next);
-          requestAnimationFrame(updateTickerMotion);
-        }
-      });
+      function resetPhraseState() {
+        currentSuggestion = getRandomSuggestion();
+        typedSuffix = '';
+        hasStartedTyping = false;
+        renderPhrase();
+        requestAnimationFrame(() => updateTickerMotion(true));
+      }
+
+      newPhraseBtn.addEventListener('click', resetPhraseState);
 
       fontBtn.addEventListener('click', () => {
         document.body.style.fontWeight = document.body.style.fontWeight === '800' ? '400' : '800';
-        requestAnimationFrame(updateTickerMotion);
+        requestAnimationFrame(() => updateTickerMotion(true));
       });
 
-      window.addEventListener('resize', updateTickerMotion);
-      window.addEventListener('load', updateTickerMotion);
+      window.addEventListener('keydown', (event) => {
+        if (event.ctrlKey || event.metaKey || event.altKey) {
+          return;
+        }
+
+        const tagName = event.target && event.target.tagName ? event.target.tagName : '';
+        if (tagName === 'INPUT' || tagName === 'BUTTON') {
+          return;
+        }
+
+        if (event.key === 'Backspace') {
+          if (typedSuffix.length === 0) {
+            return;
+          }
+
+          event.preventDefault();
+          typedSuffix = typedSuffix.slice(0, -1);
+          hasStartedTyping = typedSuffix.length > 0;
+          renderPhrase();
+          requestAnimationFrame(() => updateTickerMotion(true));
+          return;
+        }
+
+        if (event.key === 'Enter') {
+          hasStartedTyping = true;
+          typedSuffix += ' ';
+          renderPhrase();
+          requestAnimationFrame(() => updateTickerMotion(true));
+          return;
+        }
+
+        if (event.key.length === 1) {
+          hasStartedTyping = true;
+          typedSuffix += event.key;
+          renderPhrase();
+          requestAnimationFrame(() => updateTickerMotion(true));
+        }
+      });
+
+      window.addEventListener('resize', () => updateTickerMotion(false));
+      window.addEventListener('load', resetPhraseState);
     </script>
   </body>
 </html>
